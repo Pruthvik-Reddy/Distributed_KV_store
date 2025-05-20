@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+package kvstore.v1;
+
+// TODO: Define Raft internal messages and RPCs here
