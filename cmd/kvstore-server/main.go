@@ -1,70 +1,65 @@
 package main
 
 import (
-	"fmt"
 	"log"
+	"net"
+	"os"
+	"os/signal"
+	"syscall"
 
-	"Distributed_KV_store/internal/store" // Import our new store package
+	// Our internal packages
+	"distributed-kv-store/internal/rpc"
+	"distributed-kv-store/internal/store"
+
+	// Generated protobuf package
+	pb "distributed-kv-store/api/kvstore/v1"
+
+	"google.golang.org/grpc"
 )
 
 func main() {
-	log.Println("Starting Standalone Key-Value Store...")
+	// Define the network address for the gRPC server.
+	listenAddr := ":50051"
+	log.Printf("Starting gRPC server on %s", listenAddr)
 
-	// Define the path for our database files.
-	// This will create a 'data' directory in your project root.
+	// Create a TCP listener on the specified address.
+	lis, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		log.Fatalf("Failed to listen: %v", err)
+	}
+
+	// Initialize our key-value store.
 	dbPath := "./data"
-
-	// Create a new store instance.
 	kvStore, err := store.NewLevelDBStore(dbPath)
 	if err != nil {
 		log.Fatalf("Failed to create store: %v", err)
 	}
-	// `defer` ensures that the store's Close() method is called right before
-	// the main function exits, even if an error occurs.
 	defer kvStore.Close()
 
-	log.Println("Store created successfully.")
+	// Create a new gRPC server instance.
+	gRPCServer := grpc.NewServer()
 
-	// --- Let's test the store ---
+	// Create an instance of our KV service implementation.
+	kvServiceServer := rpc.NewKVServiceServer(kvStore)
 
-	key := "hello"
-	value := "world"
+	// Register our service implementation with the gRPC server.
+	pb.RegisterKVStoreServer(gRPCServer, kvServiceServer)
 
-	// 1. Put a key-value pair
-	log.Printf("Putting key='%s', value='%s'", key, value)
-	if err := kvStore.Put(key, value); err != nil {
-		log.Fatalf("Failed to put: %v", err)
-	}
-	log.Println("Put successful.")
+	// Start the gRPC server in a separate goroutine so it doesn't block.
+	go func() {
+		if err := gRPCServer.Serve(lis); err != nil {
+			log.Fatalf("Failed to serve gRPC: %v", err)
+		}
+	}()
+	log.Printf("Server is ready to accept connections.")
 
-	// 2. Get the key back
-	log.Printf("Getting key='%s'", key)
-	retrievedValue, err := kvStore.Get(key)
-	if err != nil {
-		log.Fatalf("Failed to get: %v", err)
-	}
-	log.Printf("Get successful. Retrieved value: '%s'", retrievedValue)
+	// --- Graceful Shutdown ---
+	// Wait for a shutdown signal (e.g., Ctrl+C).
+	stopCh := make(chan os.Signal, 1)
+	signal.Notify(stopCh, os.Interrupt, syscall.SIGTERM)
+	<-stopCh // Block until a signal is received.
 
-	// Verify the value
-	if retrievedValue != value {
-		log.Fatalf("Value mismatch! Expected '%s', got '%s'", value, retrievedValue)
-	}
-
-	// 3. Delete the key
-	log.Printf("Deleting key='%s'", key)
-	if err := kvStore.Delete(key); err != nil {
-		log.Fatalf("Failed to delete: %v", err)
-	}
-	log.Println("Delete successful.")
-
-	// 4. Try to get the deleted key (expect an error)
-	log.Printf("Getting deleted key='%s' (expecting an error)", key)
-	_, err = kvStore.Get(key)
-	if err != nil {
-		log.Printf("Successfully failed to get deleted key, as expected. Error: %v", err)
-	} else {
-		log.Fatalf("Should have failed to get deleted key, but it succeeded.")
-	}
-
-	fmt.Println("\n✅ All operations completed successfully!")
+	log.Println("Shutdown signal received, gracefully stopping gRPC server...")
+	gRPCServer.GracefulStop()
+	log.Println("Server stopped.")
 }
