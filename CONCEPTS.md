@@ -13,3 +13,7 @@ LevelDB :
     
 
 
+Challenges : 
+    1. Not a significant challenge but had to get used to Go to start coding. 
+
+Decisions : 
