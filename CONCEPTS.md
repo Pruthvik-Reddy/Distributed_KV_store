@@ -26,11 +26,38 @@ gRPC :
     proto file : 
         - defines API contract. 
         
-    
+RAFT : 
+    How RAFT works : 
+    1. Simulate a cluster by starting different servers on different ports. 
+    2. Each server starts as a follower. 
+    3. After a random timeout, if a follower does not hear back from leader, the follower declares itself as candidate and start election. 
+    4. It requests votes from all other nodes. 
+    5. If it receives votes from a majority of the nodes, it will become the Leader.
+    6. The new Leader will then periodically send "heartbeat" messages to all Followers to assert its authority and prevent new elections.
 
 Challenges : 
     1. Not a significant challenge but had to get used to Go to start coding. 
     2. Writing the protobuf files. They were little complex to understand. 
-    3. 
+    3. RACE conditions while implementing RAFT : 
+        -  Looking at the logs, especially from Node 2 and 3:
+
+        connection ... actively refused it: This is the key. It means a node tried to make a gRPC call to a peer, but the peer's gRPC server wasn't listening for connections yet.
+
+        Term numbers skyrocketing (term 64, 65, ...): This happens when nodes can't communicate. They all time out, become candidates, fail to get votes (because the RPCs fail), and then time out again, starting a new election with a higher term.
+
+        The root cause is in main.go. You call raft.NewNode(), which immediately tries to connect to its peers. However, you don't start the gRPC servers (startRaftServer) until after NewNode() is called. The nodes are trying to connect to each other before any of them are actually listening.
+
+        The Fix
+        We need to change the order of operations:
+
+        Initialize the Raft Node struct (without connecting).
+
+        Start the gRPC servers so they are listening.
+
+        Add a small delay to ensure they are ready.
+
+        Then, tell the Raft node to connect to its peers.
+
+        Finally, start the Raft node's main logic (the election timers).
 
 Decisions : 

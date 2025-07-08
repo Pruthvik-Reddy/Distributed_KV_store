@@ -1,0 +1,41 @@
+=============== Jul 8, 2025 (EDT) ===============
+02:02:39.796549 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+02:02:39.984042 db@open opening
+02:02:39.986470 version@stat F·[] S·0B[] Sc·[]
+02:02:40.076685 db@janitor F·2 G·0
+02:02:40.076893 db@open done T·92.8022ms
+02:04:26.227522 db@close closing
+02:04:26.228082 db@close done T·560.1µs
+=============== Jul 8, 2025 (EDT) ===============
+02:04:35.522982 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+02:04:35.523522 version@stat F·[] S·0B[] Sc·[]
+02:04:35.524027 db@open opening
+02:04:35.524108 journal@recovery F·1
+02:04:35.525400 journal@recovery recovering @1
+02:04:35.526459 version@stat F·[] S·0B[] Sc·[]
+02:04:35.651177 db@janitor F·2 G·0
+02:04:35.651177 db@open done T·127.1503ms
+02:05:03.116265 db@close closing
+02:05:03.117659 db@close done T·1.3936ms
+=============== Jul 8, 2025 (EDT) ===============
+02:06:03.239332 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+02:06:03.239962 version@stat F·[] S·0B[] Sc·[]
+02:06:03.239962 db@open opening
+02:06:03.239962 journal@recovery F·1
+02:06:03.241064 journal@recovery recovering @2
+02:06:03.242704 version@stat F·[] S·0B[] Sc·[]
+02:06:03.334423 db@janitor F·2 G·0
+02:06:03.334423 db@open done T·94.4613ms
+02:15:37.390458 db@close closing
+02:15:37.391756 db@close done T·1.2981ms
+=============== Jul 8, 2025 (EDT) ===============
+02:15:53.435607 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+02:15:53.437182 version@stat F·[] S·0B[] Sc·[]
+02:15:53.437245 db@open opening
+02:15:53.437245 journal@recovery F·1
+02:15:53.438899 journal@recovery recovering @4
+02:15:53.441878 version@stat F·[] S·0B[] Sc·[]
+02:15:53.589096 db@janitor F·2 G·0
+02:15:53.589096 db@open done T·151.8507ms
+02:16:24.149745 db@close closing
+02:16:24.150643 db@close done T·897.9µs

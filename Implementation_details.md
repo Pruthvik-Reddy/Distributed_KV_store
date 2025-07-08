@@ -37,3 +37,46 @@ Step 3 : Adding Network Layer using gRPC.
     - Install protocol buffer compiler (protoc) to generate code. 
 
 Step 4 : Adding RAFT for leader election. 
+    - Need to create nodes that communicate with each other, elect a leader and then check if nodes are active through heartbeats. 
+
+    - For this step, I am not yet connecting with the key-value store. I just want to ensure if my RAFT algorithm works. 
+
+    1. Simulate a cluster by starting different servers on different ports. 
+    2. Each server starts as a follower. 
+    3. After a random timeout, if a follower does not hear back from leader, the follower declares itself as candidate and start election. 
+    4. It requests votes from all other nodes. 
+    5. If it receives votes from a majority of the nodes, it will become the Leader.
+    6. The new Leader will then periodically send "heartbeat" messages to all Followers to assert its authority and prevent new elections.
+
+    Implementation : 
+    1. Define new api contract for RAFT internal communication. This should only be for RAFT ( server - server communication). 
+    2. Define a RAFT Node. Use struct from golang to define Node which contains all the Raft state (term, state, timers) and the logic for state transitions (e.g., convertToCandidate, startElection). It should also define the logic whether to grant a vote for candidate or not. 
+    3. Need to integrate RAFT into main ( this is different from simple starting a server ) : 
+        - Parse more command-line flags to know its own ID, its own address, and the addresses of its peers.
+
+        - Start two gRPC servers: one for client-facing KV requests (on one port) and another for internal Raft communication (on a different port).
+
+    
+    - Open three seperate terminals and start three different servers and see the logs to check if the code is working as desired. 
+
+    Challenges : RACE conditions while implementing RAFT.
+        Looking at the logs, especially from Node 2 and 3:
+
+        connection ... actively refused it: This is the key. It means a node tried to make a gRPC call to a peer, but the peer's gRPC server wasn't listening for connections yet.
+
+        Term numbers skyrocketing (term 64, 65, ...): This happens when nodes can't communicate. They all time out, become candidates, fail to get votes (because the RPCs fail), and then time out again, starting a new election with a higher term.
+
+        The root cause is in main.go. You call raft.NewNode(), which immediately tries to connect to its peers. However, you don't start the gRPC servers (startRaftServer) until after NewNode() is called. The nodes are trying to connect to each other before any of them are actually listening.
+
+        The Fix
+        We need to change the order of operations:
+
+        Initialize the Raft Node struct (without connecting).
+
+        Start the gRPC servers so they are listening.
+
+        Add a small delay to ensure they are ready.
+
+        Then, tell the Raft node to connect to its peers.
+
+        Finally, start the Raft node's main logic (the election timers). 

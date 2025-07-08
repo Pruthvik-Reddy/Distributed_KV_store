@@ -2,4 +2,22 @@ syntax = "proto3";
 
 package kvstore.v1;
 
-// TODO: Define Raft internal messages and RPCs here
+option go_package = "Distributed_KV_STORE/api/kvstore/v1;kvstore";
+
+// RaftInternal service is for communication between Raft nodes.
+service RaftInternal {
+  // RequestVote is called by candidates to gather votes.
+  rpc RequestVote(RequestVoteArgs) returns (RequestVoteReply) {}
+}
+
+message RequestVoteArgs {
+  uint64 term = 1;         // candidate's term
+  string candidate_id = 2;   // candidate requesting vote
+  uint64 last_log_index = 3; // index of candidate's last log entry
+  uint64 last_log_term = 4;  // term of candidate's last log entry
+}
+
+message RequestVoteReply {
+  uint64 term = 1;        // currentTerm, for candidate to update itself
+  bool vote_granted = 2;  // true means candidate received vote
+}
