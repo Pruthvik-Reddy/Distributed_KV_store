@@ -21,6 +21,7 @@ import (
 )
 
 type stringslice []string
+// ... (stringslice functions remain unchanged)
 func (s *stringslice) String() string { return strings.Join(*s, ", ") }
 func (s *stringslice) Set(value string) error {
 	*s = append(*s, value)
@@ -40,33 +41,39 @@ func main() {
 
 	peerMap := make(map[string]string)
 	for _, p := range peers {
-		parts := strings.Split(p, "=")
+		parts := strings.Split(p, "=");
 		if len(parts) != 2 { log.Fatalf("Invalid peer format: %s. Expected id=address", p) }
 		peerMap[parts[0]] = parts[1]
 	}
 	log.Printf("Starting node %s. Peers: %v", id, peerMap)
 
-	// --- NEW STARTUP ORDER ---
+	// --- NEW: Create the apply channel ---
+	applyCh := make(chan raft.ApplyMsg)
 
-	// 1. Initialize modules (but don't connect or start them yet)
-	raftNode := raft.NewNode(id)
+	// 1. Initialize modules
+	// NewNode now requires the apply channel
+	raftNode := raft.NewNode(id, applyCh)
 	
 	kvStore, err := store.NewLevelDBStore("./data/" + id)
 	if err != nil { log.Fatalf("Failed to create store: %v", err) }
 	defer kvStore.Close()
-	kvServiceServer := rpc.NewKVServiceServer(kvStore)
+
+	// NewKVServiceServer now requires the Raft node
+	kvServiceServer := rpc.NewKVServiceServer(kvStore, raftNode)
 	
-	// 2. Start the network servers in the background
+	// --- NEW: Start the command application goroutine ---
+	go applyCommands(kvStore, applyCh)
+
+	// 2. Start servers
 	go startRaftServer(raftNode, raftAddr)
 	go startKVServer(kvServiceServer, kvAddr)
 
-	// 3. Wait a moment for servers to come up. This is a simple solution for local testing.
 	time.Sleep(1 * time.Second)
 
-	// 4. Now, connect the Raft node to its peers.
+	// 3. Connect to peers
 	raftNode.ConnectToPeers(peerMap)
 
-	// 5. Finally, start the Raft node's main logic.
+	// 4. Start Raft
 	raftNode.Start()
 
 	// --- Graceful Shutdown ---
@@ -78,26 +85,45 @@ func main() {
 	log.Println("Shutdown complete.")
 }
 
-func startRaftServer(raftNode *raft.Node, addr string) {
-	lis, err := net.Listen("tcp", addr)
-	if err != nil { log.Fatalf("Failed to listen on raft-addr %s: %v", addr, err) }
+// applyCommands is a long-running goroutine that applies committed commands to the KV store.
+func applyCommands(s store.Store, applyCh <-chan raft.ApplyMsg) {
+	log.Println("Started command application loop")
+	for msg := range applyCh {
+		if msg.CommandValid {
+			// Simple command parsing: "OP:KEY:VALUE"
+			parts := strings.SplitN(string(msg.Command), ":", 3)
+			op := parts[0]
+			key := parts[1]
 
-	server := grpc.NewServer()
-	pb.RegisterRaftInternalServer(server, raftNode)
-	log.Printf("Raft server listening on %s", addr)
-	if err := server.Serve(lis); err != nil {
-		log.Fatalf("Failed to serve Raft gRPC: %v", err)
+			switch op {
+			case "PUT":
+				value := parts[2]
+				if err := s.Put(key, value); err != nil {
+					log.Printf("Failed to apply PUT command: %v", err)
+				}
+			case "DEL":
+				if err := s.Delete(key); err != nil {
+					log.Printf("Failed to apply DEL command: %v", err)
+				}
+			}
+		}
 	}
 }
 
-func startKVServer(kvService *rpc.Server, addr string) {
+
+func startRaftServer(raftNode *raft.Node, addr string) { /* ... unchanged ... */
+	lis, err := net.Listen("tcp", addr)
+	if err != nil { log.Fatalf("Failed to listen on raft-addr %s: %v", addr, err) }
+	server := grpc.NewServer()
+	pb.RegisterRaftInternalServer(server, raftNode)
+	log.Printf("Raft server listening on %s", addr)
+	if err := server.Serve(lis); err != nil { log.Fatalf("Failed to serve Raft gRPC: %v", err) }
+}
+func startKVServer(kvService *rpc.Server, addr string) { /* ... unchanged ... */
 	lis, err := net.Listen("tcp", addr)
 	if err != nil { log.Fatalf("Failed to listen on kv-addr %s: %v", addr, err) }
-
 	server := grpc.NewServer()
 	pb.RegisterKVStoreServer(server, kvService)
 	log.Printf("KV server listening on %s", addr)
-	if err := server.Serve(lis); err != nil {
-		log.Fatalf("Failed to serve KV gRPC: %v", err)
-	}
+	if err := server.Serve(lis); err != nil { log.Fatalf("Failed to serve KV gRPC: %v", err) }
 }

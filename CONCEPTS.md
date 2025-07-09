@@ -35,6 +35,32 @@ RAFT :
     5. If it receives votes from a majority of the nodes, it will become the Leader.
     6. The new Leader will then periodically send "heartbeat" messages to all Followers to assert its authority and prevent new elections.
 
+    Strong Consistency, Writes and Reads - How they work
+    1. When the client sends a PUT / DELETE request to any node, it should be redirected to the leader who processes that request. ( the follower nodes should forward it to leader)
+
+    2. The leader then should make an entry of it in log file. From the RAFT log file, the other followers implement it. 
+
+    3. We are focusing on Strong consistency here, so initially the reads are served by leader only. 
+
+    4. The leader responds to the client only after the operation has been committed by Raft and applied to LevelDB database. 
+
+
+    Example : 
+    1. If Node 2 isn't the leader, it will reject the request with a "not the leader" error.
+
+    2.If Node 2 is the leader, it will not immediately write to its own database. Instead, it will create a "log entry" representing the PUT command.
+
+    3. It will send this new log entry to all its followers via an AppendEntries RPC.
+
+    4.When a majority of followers have successfully saved the entry to their own logs, the leader considers the entry "committed"
+
+    5.The leader then "applies" the command from the log entry to its own LevelDB store.
+
+    6.At the same time, the followers also apply the committed command to their local LevelDB stores.
+
+    7.Only after the leader has applied the change does it respond with "success" to the client.
+
+
 Challenges : 
     1. Not a significant challenge but had to get used to Go to start coding. 
     2. Writing the protobuf files. They were little complex to understand. 
@@ -59,5 +85,7 @@ Challenges :
         Then, tell the Raft node to connect to its peers.
 
         Finally, start the Raft node's main logic (the election timers).
+
+    4. Lots of deadlocks. 
 
 Decisions : 

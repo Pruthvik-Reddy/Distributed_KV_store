@@ -24,6 +24,8 @@ const _ = grpc.SupportPackageIsVersion7
 type RaftInternalClient interface {
 	// RequestVote is called by candidates to gather votes.
 	RequestVote(ctx context.Context, in *RequestVoteArgs, opts ...grpc.CallOption) (*RequestVoteReply, error)
+	// AppendEntries is called by leader to replicate log entries; also used as heartbeat.
+	AppendEntries(ctx context.Context, in *AppendEntriesArgs, opts ...grpc.CallOption) (*AppendEntriesReply, error)
 }
 
 type raftInternalClient struct {
@@ -43,12 +45,23 @@ func (c *raftInternalClient) RequestVote(ctx context.Context, in *RequestVoteArg
 	return out, nil
 }
 
+func (c *raftInternalClient) AppendEntries(ctx context.Context, in *AppendEntriesArgs, opts ...grpc.CallOption) (*AppendEntriesReply, error) {
+	out := new(AppendEntriesReply)
+	err := c.cc.Invoke(ctx, "/kvstore.v1.RaftInternal/AppendEntries", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RaftInternalServer is the server API for RaftInternal service.
 // All implementations must embed UnimplementedRaftInternalServer
 // for forward compatibility
 type RaftInternalServer interface {
 	// RequestVote is called by candidates to gather votes.
 	RequestVote(context.Context, *RequestVoteArgs) (*RequestVoteReply, error)
+	// AppendEntries is called by leader to replicate log entries; also used as heartbeat.
+	AppendEntries(context.Context, *AppendEntriesArgs) (*AppendEntriesReply, error)
 	mustEmbedUnimplementedRaftInternalServer()
 }
 
@@ -58,6 +71,9 @@ type UnimplementedRaftInternalServer struct {
 
 func (UnimplementedRaftInternalServer) RequestVote(context.Context, *RequestVoteArgs) (*RequestVoteReply, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RequestVote not implemented")
+}
+func (UnimplementedRaftInternalServer) AppendEntries(context.Context, *AppendEntriesArgs) (*AppendEntriesReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AppendEntries not implemented")
 }
 func (UnimplementedRaftInternalServer) mustEmbedUnimplementedRaftInternalServer() {}
 
@@ -90,6 +106,24 @@ func _RaftInternal_RequestVote_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RaftInternal_AppendEntries_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AppendEntriesArgs)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaftInternalServer).AppendEntries(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/kvstore.v1.RaftInternal/AppendEntries",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaftInternalServer).AppendEntries(ctx, req.(*AppendEntriesArgs))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RaftInternal_ServiceDesc is the grpc.ServiceDesc for RaftInternal service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -100,6 +134,10 @@ var RaftInternal_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RequestVote",
 			Handler:    _RaftInternal_RequestVote_Handler,
+		},
+		{
+			MethodName: "AppendEntries",
+			Handler:    _RaftInternal_AppendEntries_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

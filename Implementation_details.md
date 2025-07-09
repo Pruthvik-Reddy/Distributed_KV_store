@@ -80,3 +80,22 @@ Step 4 : Adding RAFT for leader election.
         Then, tell the Raft node to connect to its peers.
 
         Finally, start the Raft node's main logic (the election timers). 
+
+
+Step 5 : Integrating RAFT with Key-Value Store 
+
+    When the client sends a PUT / DELETE request to any node, it should be redirected to the leader who processes that request. ( the follower nodes should forward it to leader)
+
+    The leader then should make an entry of it in log file. From the RAFT log file, the other followers implement it. 
+
+    We are focusing on Strong consistency here, so initially the reads are served by leader only. 
+
+    The leader responds to the client only after the operation has been committed by Raft and applied to LevelDB database. 
+
+
+Running : 
+    - Initialize 3 nodes as RAFT nodes and then use another CLI to run as client and make requests. 
+
+    If you make a put request, I should be able to see the logs in CLI. 
+
+    

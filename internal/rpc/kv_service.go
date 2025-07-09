@@ -2,35 +2,51 @@ package rpc
 
 import (
 	"context"
+	"fmt"
+	
 
+	"distributed-kv-store/internal/raft" // Import raft package
 	"distributed-kv-store/internal/store"
-	pb "distributed-kv-store/api/kvstore/v1" // Import generated protobuf code
+	pb "distributed-kv-store/api/kvstore/v1"
 )
 
-// Server is the implementation of our gRPC server.
-// It holds a reference to the key-value store.
 type Server struct {
-	pb.UnimplementedKVStoreServer // Recommended for forward-compatibility
-	store                         store.Store
+	pb.UnimplementedKVStoreServer
+	store    store.Store
+	raftNode *raft.Node // Add a reference to the Raft node
 }
 
-// NewKVServiceServer creates a new instance of our gRPC server.
-func NewKVServiceServer(s store.Store) *Server {
-	return &Server{store: s}
-}
-
-// Put implements the Put RPC method.
-// It takes a PutRequest from the client and calls the underlying store's Put method.
-func (s *Server) Put(ctx context.Context, req *pb.PutRequest) (*pb.PutResponse, error) {
-	err := s.store.Put(req.GetKey(), req.GetValue())
-	if err != nil {
-		return nil, err
+// NewKVServiceServer now also takes a raft.Node as a dependency.
+func NewKVServiceServer(s store.Store, r *raft.Node) *Server {
+	return &Server{
+		store:    s,
+		raftNode: r,
 	}
+}
+
+// Put now proposes the command to Raft instead of writing directly to the store.
+func (s *Server) Put(ctx context.Context, req *pb.PutRequest) (*pb.PutResponse, error) {
+	// Simple command serialization: "PUT:key:value"
+	cmd := []byte(fmt.Sprintf("PUT:%s:%s", req.GetKey(), req.GetValue()))
+	
+	// Propose the command to the Raft cluster.
+	_, _, isLeader := s.raftNode.Propose(cmd)
+	
+	if !isLeader {
+		return nil, fmt.Errorf("this node is not the leader")
+	}
+
+	// For a real implementation, you would wait for the command to be applied.
+	// For this learning step, we'll assume it will be applied and return success.
 	return &pb.PutResponse{}, nil
 }
 
-// Get implements the Get RPC method.
+// Get still reads from the local store, but we should check for leadership.
 func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, error) {
+	// For strong consistency, reads should also go through the leader.
+	// We can check leadership status, but Raft doesn't expose it directly in this simple model.
+	// A simple workaround is to try a lightweight proposal or check a status method.
+	// For now, we'll just read from the local store. In a real system, this could be stale.
 	val, err := s.store.Get(req.GetKey())
 	if err != nil {
 		return nil, err
@@ -38,11 +54,14 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	return &pb.GetResponse{Value: val}, nil
 }
 
-// Delete implements the Delete RPC method.
+// Delete now proposes the command to Raft.
 func (s *Server) Delete(ctx context.Context, req *pb.DeleteRequest) (*pb.DeleteResponse, error) {
-	err := s.store.Delete(req.GetKey())
-	if err != nil {
-		return nil, err
+	cmd := []byte(fmt.Sprintf("DEL:%s", req.GetKey()))
+
+	_, _, isLeader := s.raftNode.Propose(cmd)
+	if !isLeader {
+		return nil, fmt.Errorf("this node is not the leader")
 	}
+
 	return &pb.DeleteResponse{}, nil
 }
