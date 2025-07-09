@@ -9,7 +9,7 @@ import (
 	"distributed-kv-store/internal/store"
 	pb "distributed-kv-store/api/kvstore/v1"
 )
-
+import "distributed-kv-store/internal/monitoring"
 type Server struct {
 	pb.UnimplementedKVStoreServer
 	store    store.Store
@@ -27,6 +27,7 @@ func NewKVServiceServer(s store.Store, r *raft.Node) *Server {
 // Put now proposes the command to Raft instead of writing directly to the store.
 func (s *Server) Put(ctx context.Context, req *pb.PutRequest) (*pb.PutResponse, error) {
 	// Simple command serialization: "PUT:key:value"
+	monitoring.RequestsTotal.WithLabelValues("put").Inc()
 	cmd := []byte(fmt.Sprintf("PUT:%s:%s", req.GetKey(), req.GetValue()))
 	
 	// Propose the command to the Raft cluster.
@@ -47,6 +48,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 	// We can check leadership status, but Raft doesn't expose it directly in this simple model.
 	// A simple workaround is to try a lightweight proposal or check a status method.
 	// For now, we'll just read from the local store. In a real system, this could be stale.
+	monitoring.RequestsTotal.WithLabelValues("get").Inc()
 	val, err := s.store.Get(req.GetKey())
 	if err != nil {
 		return nil, err
@@ -56,6 +58,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (*pb.GetResponse, 
 
 // Delete now proposes the command to Raft.
 func (s *Server) Delete(ctx context.Context, req *pb.DeleteRequest) (*pb.DeleteResponse, error) {
+	monitoring.RequestsTotal.WithLabelValues("delete").Inc()
 	cmd := []byte(fmt.Sprintf("DEL:%s", req.GetKey()))
 
 	_, _, isLeader := s.raftNode.Propose(cmd)

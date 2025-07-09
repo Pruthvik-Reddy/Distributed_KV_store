@@ -12,7 +12,9 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	
 )
+import "distributed-kv-store/internal/monitoring"
 
 type NodeState int
 
@@ -140,7 +142,9 @@ func (n *Node) convertToFollower(term uint64) {
 	n.currentTerm = term
 	n.votedFor = ""
 	log.Printf("[%s] became Follower at term %d", n.id, n.currentTerm)
-	n.resetElectionTimer()
+	monitoring.IsLeader.Set(0) 
+    monitoring.CurrentTerm.Set(float64(n.currentTerm)) 
+    n.resetElectionTimer()
 }
 
 func (n *Node) resetElectionTimer() {
@@ -155,6 +159,7 @@ func (n *Node) startElection() {
 	n.mu.Lock()
 	n.state = Candidate
 	n.currentTerm++
+	monitoring.CurrentTerm.Set(float64(n.currentTerm))
 	n.votedFor = n.id
 	log.Printf("[%s] became Candidate, starting election for term %d", n.id, n.currentTerm)
 	n.resetElectionTimer()
@@ -211,7 +216,7 @@ func (n *Node) convertToLeader() {
 		return
 	}
 	n.state = Leader
-
+	monitoring.IsLeader.Set(1)
 	n.nextIndex = make(map[string]uint64)
 	n.matchIndex = make(map[string]uint64)
 	lastLogIndex := uint64(len(n.log) - 1)
@@ -323,8 +328,10 @@ func (n *Node) updateCommitIndex() {
 
 func (n *Node) applyCommitted() {
 	// Must be called with lock held
+	monitoring.CommitIndex.Set(float64(n.commitIndex))
 	for n.commitIndex > n.lastApplied {
 		n.lastApplied++
+		monitoring.LastApplied.Set(float64(n.lastApplied)) 
 		entry := n.log[n.lastApplied]
 		log.Printf("[%s] Applying command at index %d", n.id, n.lastApplied)
 		n.applyCh <- ApplyMsg{

@@ -19,6 +19,8 @@ import (
 
 	"google.golang.org/grpc"
 )
+import "distributed-kv-store/internal/monitoring"
+
 
 type stringslice []string
 // ... (stringslice functions remain unchanged)
@@ -29,11 +31,12 @@ func (s *stringslice) Set(value string) error {
 }
 
 func main() {
-	var id, kvAddr, raftAddr string
+	var id, kvAddr, raftAddr, metricsAddr string
 	var peers stringslice
 	flag.StringVar(&id, "id", "", "Node ID (required)")
 	flag.StringVar(&kvAddr, "kv-addr", ":50051", "Client-facing KV service address")
 	flag.StringVar(&raftAddr, "raft-addr", ":60051", "Internal Raft communication address")
+	flag.StringVar(&metricsAddr, "metrics-addr", ":9091", "Metrics server address")
 	flag.Var(&peers, "peer", "Peer address (provide multiple times)")
 	flag.Parse()
 
@@ -65,6 +68,7 @@ func main() {
 	go applyCommands(kvStore, applyCh)
 
 	// 2. Start servers
+	monitoring.StartMetricsServer(metricsAddr)
 	go startRaftServer(raftNode, raftAddr)
 	go startKVServer(kvServiceServer, kvAddr)
 

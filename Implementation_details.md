@@ -98,4 +98,15 @@ Running :
 
     If you make a put request, I should be able to see the logs in CLI. 
 
-    
+
+Step 6 : Adding Observability, Metrics using Grafana and Prometheus and logging with ELK. 
+
+    - I do not want anything complex as of now. I just want to see a dashoboard on how the leader is, how many PUT or GET requests are being handled and how up-to date are the logs. 
+    Prometheus is the time-series database to store these and Grafana can be used for dashboards. 
+
+    1. Add prometheus dependency. 
+    2. create a http based /metrics endpoint on a different port to expose the current values to prometheus. 
+    3. Make changes to codebase ( put, get methods increment counter, updating leader) to call the monitoring functions at right moments. 
+    4. Use Docker and Docker compose to run them locally in a easy way. 
+
+
